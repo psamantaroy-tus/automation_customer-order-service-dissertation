@@ -32,13 +32,14 @@ jobs:
           cache: maven
 
       - name: Build with Maven (skip tests)
+        working-directory: customer-service
         run: mvn clean package -DskipTests
 
       - name: Upload JAR Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-jar
-          path: target/*.jar
+          path: customer-service/target/*.jar
           retention-days: 1
 
   # ============================================================
@@ -62,6 +63,7 @@ jobs:
 
       # Runs CustomerService_UnitTest — pure Mockito, no Spring context required
       - name: Run Unit Tests
+        working-directory: customer-service
         run: mvn test -Dtest=CustomerService_UnitTest
 
       - name: Upload Unit Test Report
@@ -69,7 +71,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-report
-          path: target/surefire-reports/
+          path: customer-service/target/surefire-reports/
 
   # ============================================================
   # 4. INTEGRATION TESTS
@@ -92,6 +94,7 @@ jobs:
 
       # Runs CustomerControllerIntegrationTest — @SpringBootTest with H2 in-memory DB
       - name: Run Integration Tests
+        working-directory: customer-service
         run: mvn test -Dtest=CustomerControllerIntegrationTest
 
       - name: Upload Integration Test Report
@@ -99,7 +102,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: integration-test-report
-          path: target/surefire-reports/
+          path: customer-service/target/surefire-reports/
 
   # ============================================================
   # 5. STATIC CODE ANALYSIS (SonarCloud)
@@ -130,6 +133,7 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
 
       - name: Run SonarCloud Analysis
+        working-directory: customer-service
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -160,6 +164,7 @@ jobs:
           cache: maven
 
       - name: Build JAR
+        working-directory: customer-service
         run: mvn clean package -DskipTests
 
       - name: Log in to Docker Hub
@@ -169,7 +174,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Docker Image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/customer-order-api:latest .
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/customer-order-api:latest customer-service
 
       - name: Push Docker Image
         run: docker push ${{ secrets.DOCKER_USERNAME }}/customer-order-api:latest
