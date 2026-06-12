@@ -132,7 +132,25 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
+      - name: Resolve SonarCloud configuration
+        id: sonar-config
+        run: |
+          SONAR_ORG="${{ vars.SONAR_ORG }}"
+          if [ -z "$SONAR_ORG" ]; then
+            SONAR_ORG="${{ secrets.SONAR_ORG }}"
+          fi
+
+          if [ -z "${{ secrets.SONAR_TOKEN }}" ] || [ -z "$SONAR_ORG" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "sonar_org=" >> "$GITHUB_OUTPUT"
+            echo "::warning::Skipping SonarCloud analysis because SONAR_TOKEN or SONAR_ORG is not configured."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "sonar_org=$SONAR_ORG" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run SonarCloud Analysis
+        if: steps.sonar-config.outputs.enabled == 'true'
         working-directory: customer-service
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -140,7 +158,7 @@ jobs:
         run: >
           mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
           -Dsonar.projectKey=psamantaroy-tus_CI_CD_Automation_CustomerOrder_microservice
-          -Dsonar.organization=${{ secrets.SONAR_ORG }}
+          -Dsonar.organization=${{ steps.sonar-config.outputs.sonar_org }}
           -Dsonar.host.url=https://sonarcloud.io
           -Dsonar.qualitygate.wait=true
 
