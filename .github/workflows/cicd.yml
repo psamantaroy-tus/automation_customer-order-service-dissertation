@@ -132,7 +132,18 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
+      - name: Resolve SonarCloud run state
+        id: sonar-config
+        run: |
+          echo "has_token=${{ secrets.SONAR_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+          echo "has_org=${{ vars.SONAR_ORG != '' || secrets.SONAR_ORG != '' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip SonarCloud Analysis (missing config)
+        if: ${{ steps.sonar-config.outputs.has_token != 'true' || steps.sonar-config.outputs.has_org != 'true' }}
+        run: echo "::warning::Skipping SonarCloud analysis because SONAR_TOKEN and/or SONAR_ORG is not configured."
+
       - name: Run SonarCloud Analysis
+        if: ${{ steps.sonar-config.outputs.has_token == 'true' && steps.sonar-config.outputs.has_org == 'true' }}
         working-directory: customer-service
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -140,7 +151,7 @@ jobs:
         run: >
           mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
           -Dsonar.projectKey=psamantaroy-tus_CI_CD_Automation_CustomerOrder_microservice
-          -Dsonar.organization=${{ secrets.SONAR_ORG }}
+          -Dsonar.organization=${{ vars.SONAR_ORG || secrets.SONAR_ORG }}
           -Dsonar.host.url=https://sonarcloud.io
           -Dsonar.qualitygate.wait=true
 
@@ -167,16 +178,29 @@ jobs:
         working-directory: customer-service
         run: mvn clean package -DskipTests
 
+      - name: Resolve Docker run state
+        id: docker-config
+        run: |
+          echo "has_username=${{ secrets.DOCKER_USERNAME != '' }}" >> "$GITHUB_OUTPUT"
+          echo "has_password=${{ secrets.DOCKER_PASSWORD != '' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip Docker push (missing credentials)
+        if: ${{ steps.docker-config.outputs.has_username != 'true' || steps.docker-config.outputs.has_password != 'true' }}
+        run: echo "::warning::Skipping Docker login and push because DOCKER_USERNAME and/or DOCKER_PASSWORD is not configured."
+
       - name: Log in to Docker Hub
+        if: ${{ steps.docker-config.outputs.has_username == 'true' && steps.docker-config.outputs.has_password == 'true' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Docker Image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/customer-order-api:latest customer-service
+        if: ${{ steps.docker-config.outputs.has_username == 'true' && steps.docker-config.outputs.has_password == 'true' }}
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/customer-order-api:latest ./customer-service
 
       - name: Push Docker Image
+        if: ${{ steps.docker-config.outputs.has_username == 'true' && steps.docker-config.outputs.has_password == 'true' }}
         run: docker push ${{ secrets.DOCKER_USERNAME }}/customer-order-api:latest
 
   # ============================================================
