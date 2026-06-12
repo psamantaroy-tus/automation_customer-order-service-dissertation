@@ -21,3 +21,34 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+
+
+# Docker
+docker-compose.override.yml
+
+# Kubernetes secrets (never commit these)
+*-secret.yaml
+*.secret.yaml
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Maven wrapper jar (already partially covered)
+.mvn/wrapper/maven-wrapper.jar
+
+# Test reports (already generated, no need to track)
+**/surefire-reports/
+
+# Compiled class files (redundant with target/ but explicit)
+*.class
+
+# JAR/WAR artifacts
+*.jar
+*.war
+*.ear
+
+# Sensitive config overrides
+**/application-prod.properties
+**/application-local.properties

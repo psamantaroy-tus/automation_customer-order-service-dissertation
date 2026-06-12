@@ -1,0 +1,3 @@
+com\tus\customerservice\CustomerServiceApplicationTests.class
+com\tus\customerservice\controller\CustomerControllerIntegrationTest.class
+com\tus\customerservice\service\CustomerService_UnitTest.class

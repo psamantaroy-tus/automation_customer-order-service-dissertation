@@ -1,0 +1,98 @@
+version: '3.8'
+
+# ============================================================
+# Docker Compose — Two microservices + two MySQL databases
+#
+#  customer-service  →  mysql-customer  (customer_db, port 3307)
+#  order-service     →  mysql-order     (order_db,    port 3308)
+#  order-service calls customer-service via internal network
+# ============================================================
+
+services:
+
+  # ---- MySQL for Customer Service ----
+  mysql-customer:
+    image: mysql:8.0
+    container_name: mysql-customer
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: customer_db
+    ports:
+      - "3307:3306"
+    volumes:
+      - customer-mysql-data:/var/lib/mysql
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---- MySQL for Order Service ----
+  mysql-order:
+    image: mysql:8.0
+    container_name: mysql-order
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: order_db
+    ports:
+      - "3308:3306"
+    volumes:
+      - order-mysql-data:/var/lib/mysql
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---- Customer Service ----
+  customer-service:
+    build: ./customer-service
+    container_name: customer-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-customer:3306/customer_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+    depends_on:
+      mysql-customer:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ---- Order Service ----
+  order-service:
+    build: ./order-service
+    container_name: order-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-order:3306/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      # Points to customer-service container name on the shared network
+      CUSTOMER_SERVICE_URL: http://customer-service:8081
+    depends_on:
+      mysql-order:
+        condition: service_healthy
+      customer-service:
+        condition: service_healthy
+    networks:
+      - microservices-network
+
+volumes:
+  customer-mysql-data:
+  order-mysql-data:
+
+networks:
+  microservices-network:
+    driver: bridge
