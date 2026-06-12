@@ -132,25 +132,18 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      - name: Resolve SonarCloud configuration
+      - name: Resolve SonarCloud run state
         id: sonar-config
         run: |
-          SONAR_ORG="${{ vars.SONAR_ORG }}"
-          if [ -z "$SONAR_ORG" ]; then
-            SONAR_ORG="${{ secrets.SONAR_ORG }}"
-          fi
+          echo "has_token=${{ secrets.SONAR_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+          echo "has_org=${{ vars.SONAR_ORG != '' || secrets.SONAR_ORG != '' }}" >> "$GITHUB_OUTPUT"
 
-          if [ -z "${{ secrets.SONAR_TOKEN }}" ] || [ -z "$SONAR_ORG" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "sonar_org=" >> "$GITHUB_OUTPUT"
-            echo "::warning::Skipping SonarCloud analysis because SONAR_TOKEN or SONAR_ORG is not configured."
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "sonar_org=$SONAR_ORG" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Skip SonarCloud Analysis (missing config)
+        if: ${{ steps.sonar-config.outputs.has_token != 'true' || steps.sonar-config.outputs.has_org != 'true' }}
+        run: echo "::warning::Skipping SonarCloud analysis because SONAR_TOKEN and/or SONAR_ORG is not configured."
 
       - name: Run SonarCloud Analysis
-        if: steps.sonar-config.outputs.enabled == 'true'
+        if: ${{ steps.sonar-config.outputs.has_token == 'true' && steps.sonar-config.outputs.has_org == 'true' }}
         working-directory: customer-service
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -158,7 +151,7 @@ jobs:
         run: >
           mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
           -Dsonar.projectKey=psamantaroy-tus_CI_CD_Automation_CustomerOrder_microservice
-          -Dsonar.organization=${{ steps.sonar-config.outputs.sonar_org }}
+          -Dsonar.organization=${{ vars.SONAR_ORG || secrets.SONAR_ORG }}
           -Dsonar.host.url=https://sonarcloud.io
           -Dsonar.qualitygate.wait=true
 
