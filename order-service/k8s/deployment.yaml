@@ -16,13 +16,13 @@ spec:
     spec:
       containers:
         - name: order-service
-          image: DOCKER_USERNAME/order-service:latest
-          imagePullPolicy: IfNotPresent
+          image: 664858858732.dkr.ecr.eu-west-1.amazonaws.com/order-service:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8082
           env:
             - name: SPRING_DATASOURCE_URL
-              value: "jdbc:mysql://order-db-svc:3306/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+              value: "jdbc:mysql://order-db.cp8mqkw4aedt.eu-west-1.rds.amazonaws.com:3306/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -33,7 +33,6 @@ spec:
                 secretKeyRef:
                   name: order-db-secret
                   key: password
-            # Calls customer-service by its K8s service DNS name
             - name: CUSTOMER_SERVICE_URL
               value: "http://customer-service-svc:8081"
           resources:

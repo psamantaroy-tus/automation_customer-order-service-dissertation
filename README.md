@@ -37,11 +37,19 @@ Each job depends on the previous using `needs:`, so the pipeline **stops immedia
 - The `sonar.qualitygate.wait=true` flag ensures the pipeline fails if code quality standards are not met.
 - Using `|| true` in the deploy script allows the pipeline to continue even if no existing container is running.
 
-===run the project====branch : dissertation===
+## Run the Project (Branch: Dissertation)
 
-cd CI_CD_Automation_CustomerOrder_microservice
-docker-compose up --build
+- cd CI_CD_Automation_CustomerOrder_microservice
+ - docker-compose up --build
 
-test apis=============================
-GET http://localhost:8081/customer/customers
-GET http://localhost:8082/order/allpaginatedorders
+## Test APIs
+- GET http://localhost:8081/customer/customers
+- GET http://localhost:8082/order/allpaginatedorders
+
+
+### Docker Image Repository
+
+https://eu-west-1.console.aws.amazon.com/ecr/repositories/private/729854242652/customer-service/_/details?region=eu-west-1
+
+729854242652.dkr.ecr.eu-west-1.amazonaws.com/customer-service
+729854242652.dkr.ecr.eu-west-1.amazonaws.com/order-service

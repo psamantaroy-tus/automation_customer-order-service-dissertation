@@ -16,13 +16,13 @@ spec:
     spec:
       containers:
         - name: customer-service
-          image: DOCKER_USERNAME/customer-service:latest
-          imagePullPolicy: IfNotPresent
+          image: 664858858732.dkr.ecr.eu-west-1.amazonaws.com/customer-service:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8081
           env:
             - name: SPRING_DATASOURCE_URL
-              value: "jdbc:mysql://mysql-customer-svc:3306/customer_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+              value: "jdbc:mysql://customer-db.cp8mqkw4aedt.eu-west-1.rds.amazonaws.com:3306/customer_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
