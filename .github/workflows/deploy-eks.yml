@@ -1,0 +1,100 @@
+name: Deploy to EKS (Terraform)
+
+# Runs on every push: provisions infra with Terraform (no-op if it already
+# exists), builds & pushes both images, deploys to EKS, then smoke-tests the
+# live APIs. The existing cicd.yml (local Docker Desktop) is left untouched.
+on:
+  push:
+    branches: [ main, Automation ]
+  workflow_dispatch: {}
+
+# OIDC auth to AWS requires id-token: write.
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  # Terraform reads DB passwords from these TF_VAR_* environment variables.
+  TF_VAR_customer_db_password: ${{ secrets.CUSTOMER_DB_PASSWORD }}
+  TF_VAR_order_db_password: ${{ secrets.ORDER_DB_PASSWORD }}
+
+jobs:
+  provision-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      # ----- Phase: provision infrastructure ---------------------------------
+      - name: Terraform Init
+        working-directory: terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="dynamodb_table=tf-locks"
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve -input=false
+
+      - name: Capture Terraform outputs
+        working-directory: terraform
+        run: |
+          echo "CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
+          echo "CUSTOMER_ECR=$(terraform output -raw customer_service_ecr_url)" >> "$GITHUB_ENV"
+          echo "ORDER_ECR=$(terraform output -raw order_service_ecr_url)" >> "$GITHUB_ENV"
+          echo "CUSTOMER_DB_HOST=$(terraform output -raw customer_db_host)" >> "$GITHUB_ENV"
+          echo "ORDER_DB_HOST=$(terraform output -raw order_db_host)" >> "$GITHUB_ENV"
+
+      # ----- Phase: build & push images --------------------------------------
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push customer-service
+        run: |
+          docker build -t "$CUSTOMER_ECR:${{ github.sha }}" -t "$CUSTOMER_ECR:latest" ./customer-service
+          docker push "$CUSTOMER_ECR:${{ github.sha }}"
+          docker push "$CUSTOMER_ECR:latest"
+
+      - name: Build & push order-service
+        run: |
+          docker build -t "$ORDER_ECR:${{ github.sha }}" -t "$ORDER_ECR:latest" ./order-service
+          docker push "$ORDER_ECR:${{ github.sha }}"
+          docker push "$ORDER_ECR:latest"
+
+      # ----- Phase: deploy to EKS --------------------------------------------
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Render manifests & apply
+        run: |
+          mkdir -p rendered
+          sed -e "s|__CUSTOMER_IMAGE__|$CUSTOMER_ECR:${{ github.sha }}|g" \
+              -e "s|__CUSTOMER_DB_HOST__|$CUSTOMER_DB_HOST|g" \
+              k8s/customer-service.yaml > rendered/customer-service.yaml
+          sed -e "s|__ORDER_IMAGE__|$ORDER_ECR:${{ github.sha }}|g" \
+              -e "s|__ORDER_DB_HOST__|$ORDER_DB_HOST|g" \
+              k8s/order-service.yaml > rendered/order-service.yaml
+          kubectl apply -f rendered/customer-service.yaml
+          kubectl apply -f rendered/order-service.yaml
+
+      - name: Wait for rollouts
+        run: |
+          kubectl rollout status deployment/customer-service --timeout=300s
+          kubectl rollout status deployment/order-service --timeout=300s
+
+      # ----- Phase: smoke test the live APIs ---------------------------------
+      - name: Smoke test
+        run: bash scripts/smoke-test.sh
