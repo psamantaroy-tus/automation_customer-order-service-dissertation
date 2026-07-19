@@ -28,6 +28,12 @@ variable "node_desired_size" {
   default     = 2
 }
 
+variable "admin_principal_arn" {
+  description = "IAM user/role ARN granted kubectl cluster-admin (your local user)"
+  type        = string
+  default     = "arn:aws:iam::664858858732:user/eks-deploy-user"
+}
+
 variable "db_username" {
   description = "Master username for both RDS instances"
   type        = string
